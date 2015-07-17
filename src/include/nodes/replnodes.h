@@ -59,6 +59,17 @@ typedef struct CreateReplicationSlotCmd
 
 
 /* ----------------------
+ *		EXPORT_LOGICAL_DECODING_SNAPSHOT command
+ * ----------------------
+ */
+typedef struct ExportLogicalDecodingSnapshotCmd
+{
+	NodeTag		type;
+	char	   *plugin;
+} ExportLogicalDecodingSnapshotCmd;
+
+
+/* ----------------------
  *		DROP_REPLICATION_SLOT command
  * ----------------------
  */

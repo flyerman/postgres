@@ -911,6 +911,92 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 	ReplicationSlotRelease();
 }
 
+
+/*
+ * Export a new snapshot for logical decoding
+ */
+static void
+ExportLogicalDecodingSnapshot(ExportLogicalDecodingSnapshotCmd *cmd)
+{
+	const char *snapshot_name = NULL;
+	char        xpos[MAXFNAMELEN];
+	StringInfoData buf;
+	LogicalDecodingContext *ctx;
+
+	Assert(!MyReplicationSlot);
+
+	/* setup state for XLogReadPage */
+	sendTimeLineIsHistoric = false;
+	sendTimeLine = ThisTimeLineID;
+
+	CheckLogicalDecodingRequirements();
+
+	initStringInfo(&output_message);
+
+	ctx = CreateInitDecodingContext(cmd->plugin, NIL,
+			logical_read_xlog_page,
+			WalSndPrepareWrite, WalSndWriteData);
+
+	/*
+	 * See CreateReplicationSlot(...) for logical decoding
+	 */
+	last_reply_timestamp = 0;
+
+	/* build initial snapshot, might take a while */
+	DecodingContextFindStartpoint(ctx);
+
+	/*
+	 * Export a plain (not of the snapbuild.c type) snapshot to the user
+	 * that can be imported into another session.
+	 */
+	snapshot_name = SnapBuildExportSnapshot(ctx->snapshot_builder);
+
+	/* don't need the decoding context anymore */
+	FreeDecodingContext(ctx);
+
+	snprintf(xpos, sizeof(xpos), "%X/%X",
+			 (uint32) (MyReplicationSlot->data.confirmed_flush >> 32),
+			 (uint32) MyReplicationSlot->data.confirmed_flush);
+
+	pq_beginmessage(&buf, 'T');
+	pq_sendint(&buf, 2, 2);                         /* 2 fields */
+
+	/* first field: LSN at which we became consistent */
+	pq_sendstring(&buf, "consistent_point");        /* col name */
+	pq_sendint(&buf, 0, 4);                         /* table oid */
+	pq_sendint(&buf, 0, 2);                         /* attnum */
+	pq_sendint(&buf, TEXTOID, 4);                   /* type oid */
+	pq_sendint(&buf, -1, 2);                        /* typlen */
+	pq_sendint(&buf, 0, 4);                         /* typmod */
+	pq_sendint(&buf, 0, 2);                         /* format code */
+
+	/* second field: exported snapshot's name */
+	pq_sendstring(&buf, "snapshot_name");           /* col name */
+	pq_sendint(&buf, 0, 4);                         /* table oid */
+	pq_sendint(&buf, 0, 2);                         /* attnum */
+	pq_sendint(&buf, TEXTOID, 4);                   /* type oid */
+	pq_sendint(&buf, -1, 2);                        /* typlen */
+	pq_sendint(&buf, 0, 4);                         /* typmod */
+	pq_sendint(&buf, 0, 2);                         /* format code */
+
+	pq_endmessage(&buf);
+
+	/* Send a DataRow message */
+	pq_beginmessage(&buf, 'D');
+	pq_sendint(&buf, 2, 2);                         /* # of columns */
+
+	/* consistent wal location */
+	pq_sendint(&buf, strlen(xpos), 4);              /* col1 len */
+	pq_sendbytes(&buf, xpos, strlen(xpos));
+
+	/* snapshot name */
+	pq_sendint(&buf, strlen(snapshot_name), 4);     /* col2 len */
+	pq_sendbytes(&buf, snapshot_name, strlen(snapshot_name));
+
+	pq_endmessage(&buf);
+}
+
+
 /*
  * Get rid of a replication slot that is no longer wanted.
  */
