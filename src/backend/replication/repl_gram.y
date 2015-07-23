@@ -76,11 +76,12 @@ Node *replication_parse_result;
 %token K_PHYSICAL
 %token K_LOGICAL
 %token K_SLOT
+%token K_LOGICAL_DECODING_SNAPSHOT
 
 %type <node>	command
 %type <node>	base_backup start_replication start_logical_replication
 				create_replication_slot drop_replication_slot identify_system
-				timeline_history
+				timeline_history logical_decoding_snapshot
 %type <list>	base_backup_opt_list
 %type <defelt>	base_backup_opt
 %type <uintval>	opt_timeline
@@ -109,6 +110,7 @@ command:
 			| create_replication_slot
 			| drop_replication_slot
 			| timeline_history
+			| logical_decoding_snapshot
 			;
 
 /*
@@ -201,6 +203,19 @@ create_replication_slot:
 					$$ = (Node *) cmd;
 				}
 			;
+
+/* LOGICAL_DECODING_SNAPSHOT plugin */
+logical_decoding_snapshot:
+			K_LOGICAL_DECODING_SNAPSHOT IDENT IDENT
+				{
+					LogicalDecodingSnapshotCmd *cmd;
+					cmd = makeNode(LogicalDecodingSnapshotCmd);
+					cmd->slotname = $2;
+					cmd->plugin = $3;
+					$$ = (Node *) cmd;
+				}
+			;
+
 
 /* DROP_REPLICATION_SLOT slot */
 drop_replication_slot:

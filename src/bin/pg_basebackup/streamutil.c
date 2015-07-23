@@ -375,6 +375,58 @@ CreateReplicationSlot(PGconn *conn, const char *slot_name, const char *plugin,
 }
 
 /*
+ * Export a new snapshot synchronized with logical decoding LSNs.
+ */
+bool
+LogicalDecodingSnapshot(PGconn *conn, const char *slot_name, const char *plugin)
+{
+	PQExpBuffer query;
+	PGresult   *res;
+
+	query = createPQExpBuffer();
+
+	Assert(plugin != NULL);
+	Assert(slot_name != NULL);
+
+	/* Build query */
+	appendPQExpBuffer(query, "LOGICAL_DECODING_SNAPSHOT \"%s\" \"%s\"",
+					  slot_name, plugin);
+
+	res = PQexec(conn, query->data);
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+	{
+		fprintf(stderr, _("%s: could not export snapshot \"%s\": %s"),
+				progname, query->data, PQerrorMessage(conn));
+
+		destroyPQExpBuffer(query);
+		PQclear(res);
+		return false;
+	}
+
+	if (PQntuples(res) != 1 || PQnfields(res) != 2)
+	{
+		fprintf(stderr,
+				_("%s: could not export snapshot: got %d rows and %d fields, expected %d rows and %d fields\n"),
+				progname,
+				PQntuples(res), PQnfields(res), 1, 2);
+
+		destroyPQExpBuffer(query);
+		PQclear(res);
+		return false;
+	}
+
+	/* Print LSN position*/
+	printf("LSN: %s\n", PQgetvalue(res, 0, 0));
+
+	/* Print Snapshot name */
+	printf("Snapshot: %s\n", PQgetvalue(res, 0, 1));
+
+	destroyPQExpBuffer(query);
+	PQclear(res);
+	return true;
+}
+
+/*
  * Drop a replication slot for the given connection. This function
  * returns true in case of success.
  */

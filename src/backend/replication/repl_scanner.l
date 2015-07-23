@@ -97,6 +97,7 @@ TIMELINE_HISTORY	{ return K_TIMELINE_HISTORY; }
 PHYSICAL			{ return K_PHYSICAL; }
 LOGICAL				{ return K_LOGICAL; }
 SLOT				{ return K_SLOT; }
+LOGICAL_DECODING_SNAPSHOT	{ return K_LOGICAL_DECODING_SNAPSHOT; }
 
 ","				{ return ','; }
 ";"				{ return ';'; }

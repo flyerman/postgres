@@ -41,6 +41,7 @@ static bool do_create_slot = false;
 static bool slot_exists_ok = false;
 static bool do_start_slot = false;
 static bool do_drop_slot = false;
+static bool do_snapshot = false;
 
 /* filled pairwise with option, value. value may be NULL */
 static char **options;
@@ -72,6 +73,7 @@ usage(void)
 	printf(_("      --create-slot      create a new replication slot (for the slot's name see --slot)\n"));
 	printf(_("      --drop-slot        drop the replication slot (for the slot's name see --slot)\n"));
 	printf(_("      --start            start streaming in a replication slot (for the slot's name see --slot)\n"));
+	printf(_("      --snapshot         export a snapshot\n"));
 	printf(_("\nOptions:\n"));
 	printf(_("  -f, --file=FILE        receive log into this file, - for stdout\n"));
 	printf(_("  -F  --fsync-interval=SECS\n"
@@ -636,6 +638,7 @@ main(int argc, char **argv)
 		{"start", no_argument, NULL, 2},
 		{"drop-slot", no_argument, NULL, 3},
 		{"if-not-exists", no_argument, NULL, 4},
+		{"snapshot", no_argument, NULL, 5},
 		{NULL, 0, NULL, 0}
 	};
 	int			c;
@@ -770,6 +773,9 @@ main(int argc, char **argv)
 			case 4:
 				slot_exists_ok = true;
 				break;
+			case 5:
+				do_snapshot = true;
+				break;
 
 			default:
 
@@ -822,7 +828,7 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (!do_drop_slot && !do_create_slot && !do_start_slot)
+	if (!do_drop_slot && !do_create_slot && !do_start_slot && !do_snapshot)
 	{
 		fprintf(stderr, _("%s: at least one action needs to be specified\n"), progname);
 		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
@@ -900,6 +906,23 @@ main(int argc, char **argv)
 								   false, slot_exists_ok))
 			disconnect_and_exit(1);
 		startpos = InvalidXLogRecPtr;
+	}
+
+	if (do_snapshot)
+	{
+		if (verbose)
+			fprintf(stderr,
+					_("%s: exporting a new snapshot for logical decoding\n"),
+					progname);
+
+		if (!LogicalDecodingSnapshot(conn, replication_slot, plugin))
+			disconnect_and_exit(1);
+
+		while (!time_to_abort)
+		{
+			pg_usleep(2000);
+		}
+		disconnect_and_exit(0);
 	}
 
 	if (!do_start_slot)

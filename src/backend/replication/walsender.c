@@ -200,6 +200,7 @@ static void WalSndDone(WalSndSendDataCallback send_data);
 static XLogRecPtr GetStandbyFlushRecPtr(void);
 static void IdentifySystem(void);
 static void CreateReplicationSlot(CreateReplicationSlotCmd *cmd);
+static void LogicalDecodingSnapshot(LogicalDecodingSnapshotCmd *cmd);
 static void DropReplicationSlot(DropReplicationSlotCmd *cmd);
 static void StartReplication(StartReplicationCmd *cmd);
 static void StartLogicalReplication(StartReplicationCmd *cmd);
@@ -916,7 +917,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
  * Export a new snapshot for logical decoding
  */
 static void
-ExportLogicalDecodingSnapshot(ExportLogicalDecodingSnapshotCmd *cmd)
+LogicalDecodingSnapshot(LogicalDecodingSnapshotCmd *cmd)
 {
 	const char *snapshot_name = NULL;
 	char        xpos[MAXFNAMELEN];
@@ -930,6 +931,11 @@ ExportLogicalDecodingSnapshot(ExportLogicalDecodingSnapshotCmd *cmd)
 	sendTimeLine = ThisTimeLineID;
 
 	CheckLogicalDecodingRequirements();
+
+	/*
+	 * create the slot as ephemeral, it'll get dropped at the end.
+	 */
+	ReplicationSlotCreate(cmd->slotname, true, RS_EPHEMERAL);
 
 	initStringInfo(&output_message);
 
@@ -1416,6 +1422,10 @@ exec_replication_command(const char *cmd_string)
 
 		case T_TimeLineHistoryCmd:
 			SendTimeLineHistory((TimeLineHistoryCmd *) cmd_node);
+			break;
+
+		case T_LogicalDecodingSnapshotCmd:
+			LogicalDecodingSnapshot((LogicalDecodingSnapshotCmd *) cmd_node);
 			break;
 
 		default:
